@@ -2404,6 +2404,12 @@ let doc_field_updates ctxt typq record_id fields =
 (* TODO: check use of empty_ctxt below doesn't cause problems due to missing info *)
 let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (TD_aux (td, (l, annot))) =
   let bare_ctxt = { empty_ctxt with avoid_target_names } in
+  let doc_dec_eq_req = function
+    | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+        (* TODO: collision avoidance for x y *)
+        Some (string "`{forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)}")
+    | _ -> None
+  in
   match td with
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
       let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
@@ -2467,13 +2473,22 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
         ^^ separate space (list_init numfields (fun n -> string (s ^ string_of_int n)))
         ^^ string "]." ^^ hardline
       in
+      let params_pp = separate space (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
       let eq_pp =
-        if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then
+        if !opt_coq_all_eq_dec || IdSet.mem id generic_eq_types then (
+          let eq_req_pps = List.filter_map doc_dec_eq_req (quant_items typq) in
           string "#[export]" ^^ hardline
           ^^ group
                (nest 2
-                  (string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^ string "forall (x y : "
-                 ^^ type_id_pp ^^ string "), Decidable (x = y)." ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
+                  (flow (break 1)
+                     (((string "Instance Decidable_eq_" ^^ type_id_pp) :: typq_pps)
+                     @ eq_req_pps
+                     @ [
+                         colon ^/^ string "forall (x y : " ^^ type_id_pp ^^ space ^^ params_pp
+                         ^^ string "), Decidable (x = y).";
+                       ]
+                     )
+                  ^^ hardline ^^ intros_pp "x" ^^ intros_pp "y"
                   ^^ separate hardline
                        (list_init numfields (fun n ->
                             let ns = string_of_int n in
@@ -2485,11 +2500,11 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
           ^^ hardline
           ^^ string "refine (Build_Decidable _ true _). subst. split; reflexivity."
           ^^ hardline ^^ string "Defined." ^^ twice hardline
+        )
         else empty
       in
       let inhabited_pp =
         let req_pps = List.filter_map doc_inhabited_req (quant_items typq) in
-        let params_pp = separate space (List.filter_map (quant_item_id_name bare_ctxt) (quant_items typq)) in
         let field_pp (_, fid) = fname fid ^^ string " := inhabitant" in
         string "#[export]" ^^ hardline
         ^^ group
@@ -2523,12 +2538,6 @@ let doc_typdef types_mod avoid_target_names generic_eq_types enum_number_defs (T
             string "Inductive" ^^ space ^^ id_pp ^^ separate_in space q_pps ^^ space ^^ coloneq ^^ hardline ^^ ar_doc
           in
           let reset_implicits_pp = doc_reset_implicits id_pp typq in
-          let doc_dec_eq_req = function
-            | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
-                (* TODO: collision avoidance for x y *)
-                Some (string "`{forall x y : " ^^ doc_var bare_ctxt kid ^^ string ", Decidable (x = y)}")
-            | _ -> None
-          in
           let doc_inhabited_req = function
             | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
                 Some (string "`{Inhabited " ^^ doc_var bare_ctxt kid ^^ string "}")
