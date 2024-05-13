@@ -110,6 +110,10 @@ let coq_options =
       Arg.Set Pretty_print_coq.opt_coq_record_update,
       " use coq-record-update package's syntax for record updates"
     );
+    ( "-coq_all_eq_dec",
+      Arg.Set Pretty_print_coq.opt_coq_all_eq_dec,
+      " generate decidable equality instances for all types"
+    );
     ( "-dcoq_undef_axioms",
       Arg.Set Pretty_print_coq.opt_undef_axioms,
       " (debug) generate axioms for functions that are declared but not defined"
