@@ -3799,12 +3799,10 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
                string "Definition read_reg {A E} := @read_reg register A E.";
                string "Definition write_reg {A E} := @write_reg register A E.";
                empty;
-               (* TODO: update once we've revised the interface. *)
                string "Module Arch <: Arch.";
-               string "  Definition reg := string.";
+               string "  Definition reg := register.";
                (* string "  Definition reg_eq : EqDecision reg := _.";
                   string "  Definition reg_countable : Countable reg := _.";*)
-               string "  Definition reg_type := register_value.";
                string "  Definition va_size := 64%N.";
                (* FIXME *)
                string "  Definition pa := " ^^ pp_typ params.pa_type ^^ string ".";
@@ -3817,7 +3815,6 @@ let pp_ast_coq (types_file, types_modules) (defs_file, defs_modules) type_defs_m
                string "  Definition cache_op := " ^^ pp_typ params.cache_op_type ^^ string ".";
                string "  Definition tlb_op := " ^^ pp_typ params.tlbi_type ^^ string ".";
                string "  Definition fault (deps : Type) := " ^^ pp_typ params.fault_type ^^ string ".";
-               string "  Definition footprint_system_registers : list reg := [].";
                string "End Arch.";
                empty;
                string "Module Interface := Interface Arch.";
