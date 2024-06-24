@@ -3632,7 +3632,8 @@ end = struct
         empty;
         string "Lemma register_string_eq {T T'} (r : register T) (r' : register T') :";
         string "  register_beq r r' = String.eqb (string_of_register r) (string_of_register r').";
-        string "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
+        string
+          "destruct (Bool.reflect_dec _ _ (String.eqb_spec (string_of_register r) (string_of_register r'))) as [H|H].";
         string "* rewrite H, String.eqb_refl.";
         string "  specialize (string_of_register_roundtrip r) as H1.";
         string "  specialize (string_of_register_roundtrip r') as H2.";
@@ -3641,7 +3642,9 @@ end = struct
         string "  injection H1.";
         string "  intros; subst.";
         string "  set (f := fun (r r' : sigT register) => register_beq (projT2 r) (projT2 r')).";
-        string "  change (register_beq r r') with (f (@existT _ (fun x => register x) T r) (@existT _ (fun x => register x) T r')).";
+        string
+          "  change (register_beq r r') with (f (@existT _ (fun x => register x) T r) (@existT _ (fun x => register x) \
+           T r')).";
         string "  rewrite <- H0.";
         string "  unfold f.";
         string "  apply register_beq_refl.";
@@ -3649,7 +3652,8 @@ end = struct
         string "  rewrite H'.";
         string "  apply Bool.not_true_is_false.";
         string "  contradict H.";
-        string "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
+        string
+          "  destruct r,r'; simpl in H; try discriminate; autorewrite with register_beq_iffs in H; subst; reflexivity.";
         string "Qed.";
         empty;
       ]
