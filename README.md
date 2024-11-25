@@ -59,7 +59,7 @@ There is also an older  [handwritten Sail Armv8-A ISA model](https://github.com/
 * [Sail CHERIoT](https://github.com/microsoft/cheriot-sail). This is the Microsoft specification of their [CHERIoT](https://www.microsoft.com/en-us/research/publication/cheriot-rethinking-security-for-low-cost-embedded-systems/)  ISA design for small embedded cores with CHERI protection. 
 
 * [Sail x86 (from ACL2)](https://github.com/rems-project/sail-x86-from-acl2). This is a version of the 
-[X86isa](https://www.cs.utexas.edu/users/moore/acl2/manuals/current/manual/index-seo.php/ACL2____X86ISA) formal model of a substantial part of the x86 ISA in ACL2, by Shilpi Goel, Warren A. Hunt, Jr., and Matt Kaufmann, automatically translated into Sail.
+[X86isa](https://www.cs.utexas.edu/~moore/acl2/manuals/current/manual/?topic=ACL2____X86ISA) formal model of a substantial part of the x86 ISA in ACL2, by Shilpi Goel, Warren A. Hunt, Jr., and Matt Kaufmann, automatically translated into Sail.
 
 * [Sail MIPS and CHERI-MIPS](https://github.com/CTSRD-CHERI/sail-cheri-mips). These are specifications of MIPS and CHERI MIPS developed in the first realisation of the CHERI architecture extensions in the [CHERI](https://www.cl.cam.ac.uk/research/security/ctsrd/cheri/) project.
 
