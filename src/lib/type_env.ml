@@ -941,7 +941,15 @@ and expand_synonyms ?(simp = true) env (Typ_aux (typ, l)) =
         List.fold_left (fun typ kid -> typ_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) typ) typ !rebindings
       in
       let env = add_constraint nc env in
-      Typ_aux (Typ_exist (kopts, nc, expand_synonyms ~simp env typ), l)
+      let typ = expand_synonyms ~simp env typ in
+      (* When simplifying type variables might be removed (e.g., in 'b & false). Don't bind them or
+         the type checker can get upset. *)
+      if simp then (
+        let used_vars = KidSet.union (tyvars_of_constraint nc) (tyvars_of_typ typ) in
+        let kopts = List.filter (fun k -> KidSet.mem (kopt_kid k) used_vars) kopts in
+        match kopts with [] -> typ | _ -> Typ_aux (Typ_exist (kopts, nc, typ), l)
+      )
+      else Typ_aux (Typ_exist (kopts, nc, typ), l)
   | Typ_var v -> Typ_aux (Typ_var v, l)
 
 and expand_arg_synonyms ?(simp = true) env (A_aux (typ_arg, l)) =
