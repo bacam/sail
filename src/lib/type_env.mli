@@ -220,7 +220,10 @@ val is_scattered_id : id -> t -> bool
 val is_scattered_open : id -> t -> bool
 val end_scattered_id : at:Ast.l -> id -> t -> t
 
-val expand_synonyms : t -> typ -> typ
+(* Expand type synonyms.  Normally these do some simplifications of numeric
+   expressions, but occasionally we need a more syntactic expansion and turn
+   [simp] off. *)
+val expand_synonyms : ?simp:bool -> t -> typ -> typ
 val expand_nexp_synonyms : t -> nexp -> nexp
 val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 

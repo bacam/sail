@@ -214,7 +214,10 @@ module Env : sig
 
   val expand_nexp_synonyms : t -> nexp -> nexp
 
-  val expand_synonyms : t -> typ -> typ
+  (* Expand type synonyms.  Normally these do some simplifications of numeric
+     expressions, but occasionally we need a more syntactic expansion and turn
+     [simp] off. *)
+  val expand_synonyms : ?simp:bool -> t -> typ -> typ
 
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)
   val base_typ_of : t -> typ -> typ

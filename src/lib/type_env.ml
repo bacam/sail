@@ -885,27 +885,27 @@ and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
   | Nexp_if (i, t, e) ->
       Nexp_aux (Nexp_if (expand_constraint_synonyms env i, expand_nexp_synonyms env t, expand_nexp_synonyms env e), l)
 
-and expand_synonyms env (Typ_aux (typ, l)) =
+and expand_synonyms ?(simp = true) env (Typ_aux (typ, l)) =
   match typ with
   | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
-  | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map (expand_synonyms env) typs), l)
+  | Typ_tuple typs -> Typ_aux (Typ_tuple (List.map (expand_synonyms ~simp env) typs), l)
   | Typ_fn (arg_typs, ret_typ) ->
-      Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ), l)
-  | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2), l)
+      Typ_aux (Typ_fn (List.map (expand_synonyms ~simp env) arg_typs, expand_synonyms ~simp env ret_typ), l)
+  | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms ~simp env typ1, expand_synonyms ~simp env typ2), l)
   | Typ_app (id, args) -> (
       try
         begin
           match get_typ_synonym id env l env args with
-          | A_aux (A_typ typ, _) -> expand_synonyms env typ
+          | A_aux (A_typ typ, _) -> expand_synonyms ~simp env typ
           | _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
         end
-      with Not_found -> Typ_aux (Typ_app (id, List.map (expand_arg_synonyms env) args), l)
+      with Not_found -> Typ_aux (Typ_app (id, List.map (expand_arg_synonyms ~simp env) args), l)
     )
   | Typ_id id -> (
       try
         begin
           match get_typ_synonym id env l env [] with
-          | A_aux (A_typ typ, _) -> expand_synonyms env typ
+          | A_aux (A_typ typ, _) -> expand_synonyms ~simp env typ
           | _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
         end
       with Not_found -> Typ_aux (Typ_id id, l)
@@ -941,12 +941,13 @@ and expand_synonyms env (Typ_aux (typ, l)) =
         List.fold_left (fun typ kid -> typ_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) typ) typ !rebindings
       in
       let env = add_constraint nc env in
-      Typ_aux (Typ_exist (kopts, nc, expand_synonyms env typ), l)
+      Typ_aux (Typ_exist (kopts, nc, expand_synonyms ~simp env typ), l)
   | Typ_var v -> Typ_aux (Typ_var v, l)
 
-and expand_arg_synonyms env (A_aux (typ_arg, l)) =
+and expand_arg_synonyms ?(simp = true) env (A_aux (typ_arg, l)) =
+  let nexp_simp n = if simp then nexp_simp n else n in
   match typ_arg with
-  | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
+  | A_typ typ -> A_aux (A_typ (expand_synonyms ~simp env typ), l)
   | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc |> constraint_simp), l)
   | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp |> nexp_simp), l)
 

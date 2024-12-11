@@ -182,6 +182,9 @@ let enclose_coq_record_update = enclose (string "<|") (string "|>")
 let bigarrow = string "=>"
 let comment = enclose (string "(*") (string "*)")
 
+(* Here we want rather syntactic expansions because we need to decide whether to insert casts *)
+let expand_synonyms env typ = Env.expand_synonyms ~simp:false env typ
+
 let separate_opt s f l = separate s (List.filter_map f l)
 
 let is_number_char c =
@@ -1005,7 +1008,7 @@ let is_ctor env id = match Env.lookup_id id env with Enum _ -> true | _ -> false
 
 let is_auto_decomposed_exist ctxt env ?(rawbools = false) typ =
   let typ = expand_range_type typ in
-  match classify_ex_type ctxt env ~rawbools (Env.expand_synonyms env typ) with
+  match classify_ex_type ctxt env ~rawbools (expand_synonyms env typ) with
   | ExGeneral, kopts, typ' -> Some (kopts, typ')
   | ExNone, _, _ -> None
 
@@ -1057,7 +1060,7 @@ let filter_dep_pattern_tuple ctxt kopts (P_aux (p, ann) as pat) typ =
 *)
 let rec doc_pat ctxt apat_needed (P_aux (p, (l, annot))) =
   let env = env_of_annot (l, annot) in
-  let typ = Env.expand_synonyms env (typ_of_annot (l, annot)) in
+  let typ = expand_synonyms env (typ_of_annot (l, annot)) in
   match p with
   (* Special case translation of the None constructor to remove the unit arg *)
   | P_app (id, _) when string_of_id id = "None" -> string "None"
@@ -1334,8 +1337,8 @@ let complex_autocast ctxt env ?existentials top1 top2 =
         let env2 = Env.add_constraint nc env2 in
         aux_typ env1 env2 typ1 typ
     | _ ->
-        let typ1' = Env.expand_synonyms env1 typ1 in
-        let typ2' = Env.expand_synonyms env2 typ2 in
+        let typ1' = expand_synonyms env1 typ1 in
+        let typ2' = expand_synonyms env2 typ2 in
         if Typ.compare typ1 typ1' == 0 && Typ.compare typ2 typ2' == 0 then (false, "_")
         else aux_typ env1 env2 typ1' typ2'
   and aux_arg env1 env2 (A_aux (a1, _)) (A_aux (a2, _)) =
@@ -1376,9 +1379,9 @@ let doc_exp, doc_let =
     let maybe_cast descr typ pp =
       let env = env_of full_exp in
 
-      let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
+      let exp_typ = expand_range_type (expand_synonyms env typ) in
       let ann_typ = general_typ_of full_exp in
-      let ann_typ' = expand_range_type (Env.expand_synonyms env ann_typ) in
+      let ann_typ' = expand_range_type (expand_synonyms env ann_typ) in
       let autocast = autocast_req ctxt env typ ann_typ exp_typ ann_typ' in
       let () =
         debug ctxt (lazy (descr ^ " with type " ^ string_of_typ typ));
@@ -1798,9 +1801,9 @@ let doc_exp, doc_let =
 
               (* TODO: clean up some remnants of the embedded proofs *)
               let autocast =
-                let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l, annot)) in
+                let ann_typ = expand_synonyms env (general_typ_of_annot (l, annot)) in
                 let ann_typ = expand_range_type ann_typ in
-                let ret_typ_inst = expand_range_type (Env.expand_synonyms inst_env ret_typ_inst) in
+                let ret_typ_inst = expand_range_type (expand_synonyms inst_env ret_typ_inst) in
                 let () =
                   debug ctxt (lazy (" type returned " ^ string_of_typ ret_typ_inst));
                   debug ctxt (lazy (" type expected " ^ string_of_typ ann_typ))
@@ -1835,13 +1838,13 @@ let doc_exp, doc_let =
                   | _ -> false
                 in
                 let typ_from_fn = subst_unifiers inst typ_from_fn in
-                let typ_from_fn = Env.expand_synonyms inst_env typ_from_fn in
+                let typ_from_fn = expand_synonyms inst_env typ_from_fn in
                 (* TODO: more sophisticated check *)
                 let () =
                   debug ctxt (lazy (" arg type found    " ^ string_of_typ (typ_of arg)));
                   debug ctxt (lazy (" arg type expected " ^ string_of_typ typ_from_fn))
                 in
-                let typ_of_arg = Env.expand_synonyms env (typ_of arg) in
+                let typ_of_arg = expand_synonyms env (typ_of arg) in
                 let typ_of_arg = expand_range_type typ_of_arg in
                 let typ_of_arg' = match typ_of_arg with Typ_aux (Typ_exist (_, _, t), _) -> t | t -> t in
                 let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_, _, t), _) -> t | t -> t in
@@ -1927,7 +1930,7 @@ let doc_exp, doc_let =
           ->
             let fname = doc_field_name ctxt tid id in
             let exp_pp = expY fexp ^^ dot ^^ parens fname in
-            let field_typ = expand_range_type (Env.expand_synonyms env (typ_of_annot (l, annot))) in
+            let field_typ = expand_range_type (expand_synonyms env (typ_of_annot (l, annot))) in
             exp_pp
         | _ -> raise (report l __POS__ "E_field expression with no register or record type")
       )
@@ -1961,10 +1964,10 @@ let doc_exp, doc_let =
         construct_dep_pairs ctxt (env_of_annot (l, annot)) true full_exp (general_typ_of full_exp)
     | E_typ (typ, e) ->
         let env = env_of_annot (l, annot) in
-        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l, annot)) in
+        let outer_typ = expand_synonyms env (general_typ_of_annot (l, annot)) in
         let outer_typ = expand_range_type outer_typ in
-        let cast_typ = expand_range_type (Env.expand_synonyms env typ) in
-        let inner_typ = Env.expand_synonyms env (typ_of e) in
+        let cast_typ = expand_range_type (expand_synonyms env typ) in
+        let inner_typ = expand_synonyms env (typ_of e) in
         let inner_typ = expand_range_type inner_typ in
         let () =
           debug ctxt (lazy ("Cast of type " ^ string_of_typ cast_typ));
@@ -2226,14 +2229,14 @@ let doc_exp, doc_let =
           let typs = List.map general_typ_of exps in
           parens (separate (string ", ") (List.map2 (aux false) exps typs))
       | _ ->
-          let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
+          let typ' = expand_range_type (expand_synonyms (env_of exp) typ) in
           debug ctxt (lazy ("Constructing " ^ string_of_exp exp ^ " at type " ^ string_of_typ typ));
           let out_typ =
             match classify_ex_type ctxt (env_of exp) ~rawbools typ' with
             | ExNone, _, _ -> typ'
             | ExGeneral, _, typ' -> typ'
           in
-          let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
+          let in_typ = expand_range_type (expand_synonyms (env_of exp) (typ_of exp)) in
           let in_typ = match destruct_exist_plain in_typ with Some (_, _, t) -> t | None -> in_typ in
           let exp_pp = top_exp ctxt want_parens exp in
           exp_pp
@@ -2385,7 +2388,7 @@ let types_used_with_generic_eq defs =
                 if Env.is_extern f (env_of_annot annot) "coq" then (
                   let f' = Env.get_extern f (env_of_annot annot) "coq" in
                   if f' = "generic_eq" || f' = "generic_neq" then
-                    add_typ typs (Env.expand_synonyms (env_of arg1) (typ_of arg1))
+                    add_typ typs (expand_synonyms (env_of arg1) (typ_of arg1))
                   else typs
                 )
                 else typs
@@ -3305,7 +3308,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
   let used_a_pattern = ref false in
   let doc_binder ((P_aux (p, ann) as pat), typ) =
     let env = env_of_annot ann in
-    let exp_typ = Env.expand_synonyms env typ in
+    let exp_typ = expand_synonyms env typ in
     let () =
       debug ctxt (lazy (" pattern " ^ string_of_pat pat));
       debug ctxt (lazy (" with expanded type " ^ string_of_typ exp_typ))
@@ -3339,7 +3342,7 @@ let doc_funcl_init global proof_mode mutrec rec_opt ?rec_set (FCL_aux (FCL_funcl
             (fun (pat, typ) ->
               match pat_is_plain_binder env pat with
               | Some (Some id) -> begin
-                  match destruct_exist_plain (Env.expand_synonyms env (expand_range_type typ)) with
+                  match destruct_exist_plain (expand_synonyms env (expand_range_type typ)) with
                   | Some (_, NC_aux (NC_true, _), _) -> None
                   | Some
                       ( [KOpt_aux (KOpt_kind (_, kid), _)],
@@ -3668,7 +3671,7 @@ let doc_val global pat exp =
     match pat_typ with
     | None -> (typpp, exp)
     | Some typ -> (
-        let typ = expand_range_type (Env.expand_synonyms env typ) in
+        let typ = expand_range_type (expand_synonyms env typ) in
         match destruct_exist_plain typ with
         | None -> (typpp, exp)
         | Some _ ->
