@@ -48,6 +48,8 @@ inductive_set T (*:: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a,
 | TLB_op_request: "((TLB_op_request r k), E_tlb_op_request r, k) \<in> T"
 | Fault: "((Fault_announce f k), E_fault_announce f, k) \<in> T"
 | Eret: "((Eret_announce a k), E_eret_announce a, k) \<in> T"
+| Cycle_count: "((Cycle_count k), E_cycle_count, k) \<in> T"
+| Get_cycle_count: "((Get_cycle_count k), E_get_cycle_count v, k v) \<in> T"
 
 lemma emitEvent_iff_T: "emitEvent m e = Some m' \<longleftrightarrow> (m, e, m') \<in> T"
   by (cases e) (auto simp: emitEvent_def elim: T.cases intro: T.intros split: monad.splits)
@@ -72,6 +74,8 @@ lemma emitEvent_cases:
   | (TLB_op_request) r k where "m = TLB_op_request r k" and "e = E_tlb_op_request r" and "m' = k"
   | (Fault) f k where "m = Fault_announce f k" and "e = E_fault_announce f" and "m' = k"
   | (Eret) a k where "m = Eret_announce a k" and "e = E_eret_announce a" and "m' = k"
+  | (Cycle_count) k where "m = Cycle_count k" and "e = E_cycle_count" and "m' = k"
+  | (Get_cycle_count) v k where "m = Get_cycle_count k" and "e = E_get_cycle_count v" and "m' = k v"
   using assms
   by (auto simp: emitEvent_def split: event.splits monad.splits if_splits)
 
@@ -121,6 +125,8 @@ lemma Traces_cases:
   | (TLB_op) r k t' where "m = TLB_op_request r k" and "t = E_tlb_op_request r # t'" and "(k, t', m') \<in> Traces"
   | (Fault) f k t' where "m = Fault_announce f k" and "t = E_fault_announce f # t'" and "(k, t', m') \<in> Traces"
   | (Eret) pa k t' where "m = Eret_announce pa k" and "t = E_eret_announce pa # t'" and "(k, t', m') \<in> Traces"
+  | (Cycle_count) k t' where "m = Cycle_count k" and "t = E_cycle_count # t'" and "(k, t', m') \<in> Traces"
+  | (Get_cycle_count) v k t' where "m = Get_cycle_count k" and "t = E_get_cycle_count v # t'" and "(k v, t', m') \<in> Traces"
 proof (use Run in \<open>cases m t m' set: Traces\<close>)
   case Nil
   then show ?thesis by (auto intro: that(1))
@@ -148,6 +154,8 @@ lemma Traces_iffs:
   "\<And>req k t m'. (TLB_op_request req k, t, m') \<in> Traces \<longleftrightarrow> (t = [] \<and> m' = TLB_op_request req k \<or> (\<exists>t'. t = E_tlb_op_request req # t' \<and> (k, t', m') \<in> Traces))"
   "\<And>f k t m'. (Fault_announce f k, t, m') \<in> Traces \<longleftrightarrow> (t = [] \<and> m' = Fault_announce f k \<or> (\<exists>t'. t = E_fault_announce f # t' \<and> (k, t', m') \<in> Traces))"
   "\<And>pa k t m'. (Eret_announce pa k, t, m') \<in> Traces \<longleftrightarrow> (t = [] \<and> m' = Eret_announce pa k \<or> (\<exists>t'. t = E_eret_announce pa # t' \<and> (k, t', m') \<in> Traces))"
+  "\<And>k t m'. (Cycle_count k, t, m') \<in> Traces \<longleftrightarrow> (t = [] \<and> m' = Cycle_count k \<or> (\<exists>t'. t = E_cycle_count # t' \<and> (k, t', m') \<in> Traces))"
+  "\<And>k t m'. (Get_cycle_count k, t, m') \<in> Traces \<longleftrightarrow> (t = [] \<and> m' = Get_cycle_count k \<or> (\<exists>v t'. t = E_get_cycle_count v # t' \<and> (k v, t', m') \<in> Traces))"
   by (auto elim: Traces_cases intro: Traces_ConsI)
 
 lemmas Done_Traces_iff[iff] = Traces_iffs(1)
