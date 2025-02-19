@@ -653,6 +653,7 @@ let rewrite_ast_remove_vector_concat env ast =
     {
       rewrite_exp = rewrite_exp_remove_vector_concat_pat;
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun = rewrite_fun_remove_vector_concat_pat;
@@ -1326,6 +1327,7 @@ let rewrite_ast_remove_bitvector_pats env ast =
     {
       rewrite_exp = rewrite_exp_remove_bitvector_pat;
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun = rewrite_fun_remove_bitvector_pat;
@@ -1571,6 +1573,7 @@ let rewrite_ast_exp_lift_assign env defs =
     {
       rewrite_exp = rewrite_exp_lift_assign_intro;
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       (*_lift_assign_intro*) rewrite_fun;
@@ -2226,6 +2229,7 @@ let rewrite_ast_remove_blocks env =
     {
       rewrite_exp = (fun _ -> fold_exp alg);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -2456,6 +2460,7 @@ let rewrite_ast_letbind_effects effect_info env =
         {
           rewrite_exp;
           rewrite_pat;
+          rewrite_mpat;
           rewrite_let;
           rewrite_lexp;
           rewrite_fun;
@@ -2521,6 +2526,7 @@ let rewrite_ast_internal_lets env =
     {
       rewrite_exp = (fun _ exp -> fold_exp alg exp);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -3003,6 +3009,7 @@ let rewrite_ast_remove_superfluous_letbinds env =
     {
       rewrite_exp = (fun _ -> fold_exp alg);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -3108,6 +3115,7 @@ let rewrite_ast_remove_superfluous_returns env =
     {
       rewrite_exp = (fun _ -> fold_exp alg);
       rewrite_pat;
+      rewrite_mpat;
       rewrite_let;
       rewrite_lexp;
       rewrite_fun;
@@ -3132,7 +3140,16 @@ let rewrite_ast_remove_e_assign env ast =
   in
   let rewrite_exp _ e = replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_ast_base
-    { rewrite_exp; rewrite_pat; rewrite_let; rewrite_lexp; rewrite_fun; rewrite_def; rewrite_ast = rewrite_ast_base }
+    {
+      rewrite_exp;
+      rewrite_pat;
+      rewrite_mpat;
+      rewrite_let;
+      rewrite_lexp;
+      rewrite_fun;
+      rewrite_def;
+      rewrite_ast = rewrite_ast_base;
+    }
     { ast with defs = loop_specs @ ast.defs }
 
 let merge_funcls env ast =
@@ -3810,6 +3827,7 @@ module MakeExhaustive = struct
         {
           rewrite_exp = (fun _ -> fold_exp alg);
           rewrite_pat;
+          rewrite_mpat;
           rewrite_let;
           rewrite_lexp;
           rewrite_fun;
