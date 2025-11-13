@@ -3975,6 +3975,7 @@ let doc_isla global (DEF_aux (aux, _)) =
 
 module NewRegisters : sig
   val doc_reg_info : global_context -> Env.t -> (typ * id * bool) list -> PPrint.document
+  val generic_value_update_fns : global_context -> Env.t -> _ def list -> PPrint.document
 end = struct
   let opt_cons v = function None -> Some [v] | Some t -> Some (v :: t)
 
@@ -4481,6 +4482,47 @@ end = struct
         empty;
         empty;
       ]
+
+  let generic_value_update_fns global env defs =
+    let bare_ctxt = { empty_ctxt with global } in
+    separate hardline
+    @@ [string "Module GenericValueUpdates."]
+    @
+    let update_typ prev new_value typ =
+      match Env.expand_synonyms env typ with
+      | Typ_aux (Typ_id (Id_aux (Id "nat", _)), _) | Typ_aux (Typ_app (Id_aux (Id "atom", _), _), _) ->
+          string "update_Z " ^^ prev ^^ space ^^ new_value
+      | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), _), _) -> string "update_bitvector " ^^ prev ^^ space ^^ new_value
+      | _ -> string "(*TODO*) " ^^ prev
+    in
+    let update_record typ_id quant fields =
+      let type_id_pp = doc_id_type global None typ_id in
+      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
+      (string "  Definition update_" ^^ type_id_pp ^^ string " (prev : " ^^ type_id_pp
+     ^^ string ") (up : generic_value) : " ^^ type_id_pp ^^ string " := {|"
+      )
+      :: List.map
+           (fun ((field_id, field_typ), _) ->
+             string "    "
+             ^^ doc_field_name bare_ctxt typ_id field_id
+             ^^ string " := "
+             ^^ update_typ
+                  (string "prev." ^^ parens (doc_field_name bare_ctxt typ_id field_id))
+                  (parens @@ string "field_in_genval" ^^ space
+                  ^^ dquotes (string (string_of_id field_id))
+                  ^^ string " up"
+                  )
+                  field_typ
+             ^^ string ";"
+           )
+           fields
+      @ [string "  |}."; empty]
+    in
+    let update_for_def = function
+      | DEF_aux (DEF_type (TD_aux (TD_record (id, quant, fields, _), _)), _) -> update_record id quant fields
+      | _ -> []
+    in
+    List.concat_map update_for_def defs @ [string "End."]
 end
 
 let find_exc_typ defs =
@@ -4750,6 +4792,8 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
     let typdefs, defs = List.partition is_typ_def defs in
     let typdefs = if not separate_interface_file then typdefs @ inst_defs else typdefs in
 
+    let generic_update_defs = NewRegisters.generic_value_update_fns global type_env typdefs in
+
     let doc_def = doc_def global unimplemented generic_eq_types countable_types enum_number_defs in
     let () =
       if !opt_undef_axioms || IdSet.is_empty unimplemented then ()
@@ -4822,6 +4866,8 @@ let pp_ast_coq library_style (types_file, types_modules) (interface_file, interf
             string "Open Scope Z.";
             empty;
             separate empty (List.map doc_def typdefs);
+            empty;
+            generic_update_defs;
             empty;
           ]
          @
