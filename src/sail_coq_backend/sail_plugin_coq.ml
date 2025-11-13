@@ -199,10 +199,24 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ctx env effect_inf
   let base_imports_default =
     List.map (( ^ ) base_imports_lib)
       ( if Preprocess.have_symbol "CONCURRENCY_INTERFACE_V2" then
-          ["Base"; "Real"; "ConcurrencyInterfaceTypesV2"; "ConcurrencyInterfaceV2"; "ConcurrencyInterfaceBuiltinsV2"]
+          [
+            "Base";
+            "GenericValue";
+            "Real";
+            "ConcurrencyInterfaceTypesV2";
+            "ConcurrencyInterfaceV2";
+            "ConcurrencyInterfaceBuiltinsV2";
+          ]
         else if Option.is_some concurrency_monad_params then
-          ["Base"; "Real"; "ConcurrencyInterfaceTypes"; "ConcurrencyInterface"; "ConcurrencyInterfaceBuiltins"]
-        else ["Base"; "Real"]
+          [
+            "Base";
+            "GenericValue";
+            "Real";
+            "ConcurrencyInterfaceTypes";
+            "ConcurrencyInterface";
+            "ConcurrencyInterfaceBuiltins";
+          ]
+        else ["Base"; "Real"; "GenericValue"]
       )
   in
   let base_imports =
