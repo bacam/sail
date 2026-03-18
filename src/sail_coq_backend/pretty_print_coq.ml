@@ -4467,41 +4467,74 @@ end = struct
       List.fold_left (fun pp (t, rs) -> pp ^^ per_type_register_enum bare_ctxt t rs) empty type_regs_map
     in
 
-    separate hardline
+    (* TODO: make conditional *)
+    let register_type_update_pp =
+      let match_pp =
+        (* We use a pattern match to refine `type_of_register r` to a concrete type, but
+           we need at least one concrete pattern for that to happen. *)
+        match type_regs_map with
+        | [] -> string "_"
+        | [(typ_id, _)] -> doc_id_ctor bare_ctxt (reg_case_name typ_id) ^^ string " _"
+        | (typ_id, _) :: _ -> doc_id_ctor bare_ctxt (reg_case_name typ_id) ^^ string " _ | _ "
+      in
       [
-        reg_enums;
-        type_enum bare_ctxt env type_map;
-        register_refs bare_ctxt env type_regs_map;
-        empty;
-        string "(* Definitions to support the lifting to the sequential monad *)";
-        regstate bare_ctxt env type_map;
-        reg_accessors bare_ctxt env type_map;
-        string
-          "Definition register_accessors : register_accessors regstate register type_of_register := (@register_lookup, \
-           @register_set).";
+        string "#[global] Instance update_register_type (r : register) : GenericUpdate (type_of_register r) := {";
+        string "  generic_update gv :=";
+        string "    match r with " ^^ match_pp ^^ string " => generic_update gv end";
+        string "}.";
         empty;
         empty;
       ]
+    in
 
+    separate hardline
+      ([
+         reg_enums;
+         type_enum bare_ctxt env type_map;
+         register_refs bare_ctxt env type_regs_map;
+         empty;
+         string "(* Definitions to support the lifting to the sequential monad *)";
+         regstate bare_ctxt env type_map;
+         reg_accessors bare_ctxt env type_map;
+         string
+           "Definition register_accessors : register_accessors regstate register type_of_register := \
+            (@register_lookup, @register_set).";
+         empty;
+       ]
+      @ register_type_update_pp
+      )
+
+  (* TODO:
+   - control when this is generated; currently requires stdpp and coq-record-updates
+   - limit to types reachable from registers (because otherwise we generate one for, eg, the risc-v ast is enough for it for it to oom)
+ *)
   let generic_value_update_fns global env defs =
     let bare_ctxt = { empty_ctxt with global } in
     separate hardline
     @@ [string "Module GenericValueUpdates."]
     @
-    let update_typ new_value prev typ =
-      match Env.expand_synonyms env typ with
-      | Typ_aux (Typ_id (Id_aux (Id "nat", _)), _) | Typ_aux (Typ_app (Id_aux (Id "atom", _), _), _) ->
-          string "update_Z " ^^ new_value ^^ space ^^ prev
-      | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), _), _) -> string "update_bitvector " ^^ new_value ^^ space ^^ prev
-      | Typ_aux (Typ_id id, _) -> string "update_" ^^ doc_id_type global None id ^^ space ^^ new_value ^^ space ^^ prev
-      | _ -> string "(*TODO*) " ^^ prev
-    in
     let update_record typ_id quant fields =
       let type_id_pp = doc_id_type global None typ_id in
       let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
-      (string "  Definition update_" ^^ type_id_pp
-      ^^ string "_field (name : string) (up : generic_value) (prev : "
-      ^^ type_id_pp ^^ string ") : result " ^^ type_id_pp ^^ string " string := match name with"
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items quant) in
+      let full_type_pp = separate space full_type_pps in
+      let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
+      let type_reqs =
+        List.filter_map
+          (function
+            | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                Some (string "`{GenericUpdate " ^^ doc_var bare_ctxt kid ^^ string "}")
+            | _ -> None
+            )
+          (quant_items quant)
+      in
+      (separate space
+      @@ [string "  Definition update_" ^^ type_id_pp ^^ string "_field "]
+      @ typq_pps @ type_reqs
+      @ [
+          string "(name : string) (up : generic_value) (prev : "
+          ^^ full_type_pp ^^ string ") : result " ^^ type_for_class ^^ string " string := match name with";
+        ]
       )
       :: List.map
            (fun ((field_id, field_typ), _) ->
@@ -4510,42 +4543,101 @@ end = struct
              ^^ string " => result_bind (fun x => Ok (prev <| "
              ^^ doc_field_name bare_ctxt typ_id field_id
              ^^ string " := x |>)) "
-             ^^ parens
-                  (update_typ (string "up")
-                     (string "prev." ^^ parens (doc_field_name bare_ctxt typ_id field_id))
-                     field_typ
-                  )
+             ^^ parens (string "generic_update up prev." ^^ parens (doc_field_name bare_ctxt typ_id field_id))
            )
            fields
       @ [
           string "  | _ => Err (\"Unknown field \" ++ name)%string";
           string "  end.";
           empty;
-          string "  Definition update_" ^^ type_id_pp ^^ string " (up : generic_value) (prev : " ^^ type_id_pp
-          ^^ string ") : result " ^^ type_id_pp ^^ string " string := match up with";
-          string "  | GVStruct l => fold_left (fun x '(fl, v) => result_bind (update_"
+          separate space
+          @@ [string "  #[global] Instance update_" ^^ type_id_pp]
+          @ typq_pps @ type_reqs
+          @ [string ": GenericUpdate " ^^ type_for_class ^^ string " := {"];
+          string "  generic_update up prev := match up with";
+          string "    | GVStruct l => fold_left (fun x '(fl, v) => result_bind (update_"
           ^^ type_id_pp ^^ string "_field fl v) x) l (Ok prev)";
-          string "  | _ => Err \"Bad generic value for structure\"";
-          string "  end.";
+          string "    | _ => Err \"Bad generic value for structure\"";
+          string "    end";
+          string "  }.";
+          empty;
+        ]
+    in
+    let update_variant typ_id quant ar =
+      let type_id_pp = doc_id_type global None typ_id in
+      let typq_pps = doc_typquant_items bare_ctxt Env.empty braces quant in
+      let full_type_pps = type_id_pp :: List.filter_map (quant_item_id_name bare_ctxt) (quant_items quant) in
+      let full_type_pp = separate space full_type_pps in
+      let type_for_class = if List.length full_type_pps > 1 then parens full_type_pp else full_type_pp in
+      let type_reqs =
+        List.filter_map
+          (function
+            | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type, _), kid), _)), _) ->
+                Some
+                  (string "`{GenericUpdate " ^^ doc_var bare_ctxt kid ^^ string "} `{Inhabited "
+                 ^^ doc_var bare_ctxt kid ^^ string "}"
+                  )
+            | _ -> None
+            )
+          (quant_items quant)
+      in
+      [
+        separate space
+        @@ [string "  #[global] Instance update_" ^^ type_id_pp]
+        @ typq_pps @ type_reqs
+        @ [string ": GenericUpdate " ^^ type_for_class ^^ string " := {"];
+        string "  generic_update up prev := match up with";
+      ]
+      @ List.map
+          (fun (Tu_aux (Tu_ty_id (ar_typ, ar_id), _)) ->
+            let arm_name_pp = dquotes (string (string_of_id ar_id)) in
+            let arm_ctor_pp = doc_id_ctor bare_ctxt ar_id in
+            if is_unit_typ ar_typ then
+              string "  | GVString " ^^ arm_name_pp ^^ string " => Ok (" ^^ arm_ctor_pp ^^ string " tt)"
+            else (
+              let prev_arg =
+                (* Don't put inhabitant inside the wildcard case because Rocq will repeat the typeclass search for each
+                   constructor. *)
+                if List.length ar > 1 then
+                  string "(opt_def inhabitant match prev with " ^^ arm_ctor_pp ^^ string " x => Some x | _ => None end)"
+                else string "(match prev with " ^^ arm_ctor_pp ^^ string " x => x end)"
+              in
+              string "  | GVArray [GVString " ^^ arm_name_pp
+              ^^ string "; up_arg] => result_bind (fun x => Ok ("
+              ^^ arm_ctor_pp ^^ string " x)) "
+              ^^ parens (string "generic_update up_arg " ^^ prev_arg)
+            )
+          )
+          ar
+      @ [
+          string "  | _ => Err (\"Invalid value for " ^^ type_id_pp ^^ string "\")%string";
+          string "  end";
+          string "}.";
           empty;
         ]
     in
     let update_for_def = function
-      | DEF_aux (DEF_type (TD_aux (TD_record (id, quant, fields, _), _)), _) -> update_record id quant fields
-      | DEF_aux (DEF_type (TD_aux (TD_enum (id, elements, _), _)), _) ->
-          let id_pp = doc_id_type global None id in
-          (string "  Definition update_" ^^ id_pp ^^ string " (up : generic_value) (prev : " ^^ id_pp
-         ^^ string ") : result " ^^ id_pp ^^ string " string :="
+      | DEF_aux (DEF_type td, _) ->
+          if List.mem (string_of_id (id_of_type_def td)) !opt_extern_types == !opt_generate_extern_types then (
+            match td with
+            | TD_aux (TD_record (id, quant, fields, _), _) -> update_record id quant fields
+            | TD_aux (TD_variant (Id_aux (Id "option", _), _quant, _arms, _), _) -> []
+            | TD_aux (TD_variant (id, quant, arms, _), _) -> update_variant id quant arms
+            | TD_aux (TD_enum (id, elements, _), _) ->
+                let id_pp = doc_id_type global None id in
+                (string "  #[global] Instance update_" ^^ id_pp ^^ string " : GenericUpdate " ^^ id_pp ^^ string " := {")
+                :: string "    generic_update up prev := update_enum_type up ["
+                :: Util.map_last
+                     (fun last (elt_id, _) ->
+                       string "      "
+                       ^^ parens (dquotes (string (string_of_id elt_id)) ^^ string ", " ^^ doc_id_ctor bare_ctxt elt_id)
+                       ^^ if last then empty else string ";"
+                     )
+                     elements
+                @ [string "    ] prev"; string "  }."; empty]
+            | _ -> []
           )
-          :: string "    update_enum_type up ["
-          :: Util.map_last
-               (fun last (elt_id, _) ->
-                 string "      "
-                 ^^ parens (dquotes (string (string_of_id elt_id)) ^^ string ", " ^^ doc_id_ctor bare_ctxt elt_id)
-                 ^^ if last then empty else string ";"
-               )
-               elements
-          @ [string "    ] prev."; empty]
+          else []
       | _ -> []
     in
     List.concat_map update_for_def defs @ [string "End GenericValueUpdates."]
